@@ -23,17 +23,27 @@ struct __attribute__((__packed__)) superblock {
 };
 
 /* ROOT DIRECTORY */
-struct __attribute__((__packed__)) rootdir {
+struct __attribute__((__packed__)) file {
     char filename[16];
     uint32_t file_size;
     uint16_t data_index;
     char padding[10];
 };
 
+/* FILE DESCRIPTOR */
+struct file_descriptor {
+    struct file* file;
+    int offset;
+};
+
 /* DECLARING VARIABLES */
 struct superblock* super_block;
 uint16_t *file_table;
-struct rootdir* root_dir;
+struct file* root_dir;
+
+// Open Files
+struct file_descriptor* fd_table[FS_OPEN_MAX_COUNT];
+uint8_t num_open = 0;
 
 /* HELPER FUNCTIONS */
 int get_fat_free_blk() {
@@ -83,7 +93,7 @@ int fs_mount(const char *diskname)
     /* Create root directory @root_dir
      * Total size = FS_FILE_MAX_COUNT (or 128)
      */
-    root_dir = (struct rootdir*)malloc(sizeof(struct rootdir) * FS_FILE_MAX_COUNT);
+    root_dir = (struct file*)malloc(sizeof(struct file) * FS_FILE_MAX_COUNT);
 
     /* Read into root_dir */
     block_read(super_block->rdir_blk, root_dir);
@@ -99,7 +109,7 @@ int fs_mount(const char *diskname)
         block_read(i, data_blk);
         memcpy(file_table + index, data_blk, BLOCK_SIZE);
         index += 4096;
-    }    
+    }   
 
     /* Success */
     return 0;
@@ -171,6 +181,8 @@ int fs_create(const char *filename)
     return 0;
 }
 
+
+
 int fs_delete(const char *filename)
 {
     /* Check if filename is valid */
@@ -223,19 +235,107 @@ int fs_ls(void)
 
 int fs_open(const char *filename)
 {
-	/* TODO: Phase 3 */
-    return 0;
+    /* Check if filename is valid */
+    if (strlen(filename) + 1 > FS_FILENAME_LEN)
+    {
+        perror("filename too long");
+        return -1;
+    }
+
+    // Check if too many files are open
+    if (num_open == FS_OPEN_MAX_COUNT-1)
+    {
+        return -1;
+    }
+
+    /* Find the file */
+    int i;
+    for (i = 0; i < FS_OPEN_MAX_COUNT; i++)
+    {
+        // Check next element is a valid file
+        if (root_dir[i].filename[0] != '\0')
+        {
+            // Check if this is the file
+            if (strcmp(root_dir[i].filename, filename) == 0)
+            {
+                // Open File
+                struct file_descriptor* open_file = (struct file_descriptor*) malloc(sizeof(struct file_descriptor));
+                open_file->file = &(root_dir[i]);
+                open_file->offset = 0;
+                num_open++;
+
+                // Add to next open fd_descriptor
+                int a;
+                for(a = 0; a < FS_OPEN_MAX_COUNT; a++)
+                {
+                    if(fd_table[a] == NULL)
+                    {
+                        fd_table[a] = open_file;
+                        return a; // a is the file descriptor
+                    }
+                }
+
+            }
+        }
+    }
+
+    // File Not Found
+    return -1;
 }
 
 int fs_close(int fd)
 {
-	/* TODO: Phase 3 */
+    // Check if too many files are open
+    if (num_open == FS_OPEN_MAX_COUNT-1)
+    {
+        return -1;
+    }
+
+    // Check if fd is out of bounds
+    if(fd < 0 || fd >= FS_OPEN_MAX_COUNT) 
+    {
+        return -1;
+    }
+    
+    // Attempt lookup to determine if file exists at fd
+    if(fd_table[fd] == NULL)
+    { // There was no file open at fd
+        return -1; 
+    } else {
+        // Free the fd
+        struct file_descriptor* close_fd = fd_table[fd];
+        fd_table[fd] = NULL;
+
+        free(close_fd);
+        num_open--;
+    }
+
     return 0;
 }
 
 int fs_stat(int fd)
 {
-	/* TODO: Phase 3 */
+    // Check if too many files are open
+    if (num_open == FS_OPEN_MAX_COUNT-1)
+    {
+        return -1;
+    }
+
+    // Check if fd is out of bounds
+    if(fd < 0 || fd >= FS_OPEN_MAX_COUNT) 
+    {
+        return -1;
+    }
+    
+    // Attempt lookup to determine if file exists at fd
+    if(fd_table[fd] == NULL)
+    { // There was no file open at fd
+        return -1; 
+    } else {
+        // Free the fd
+        return fd_table[fd]->file->file_size;
+    }
+
     return 0;
 }
 
