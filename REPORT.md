@@ -26,7 +26,7 @@ To implement the FAT, we used two different variables to represent the fat table
 ### Root Directory 
   
 To implement the root directory, we created a struct similar to the instructions  
-`file`. The struct contains the 16 char array file name `filename', the file size  
+`file`. The struct contains the 16 char array file name `filename`, the file size  
 `file_size`, the index of the first data block 'data_index', and a 10 char array  
 that will be unused 'padding'.  
   
@@ -132,7 +132,7 @@ Some invalid filenames included: `filefilefilefile` (16 characters)
   
 In this stage we needed to create a new struct for the file descriptors in order to  
 handle reading and writing. We made `file_descriptor` a struct consisting of two  
-variables: `struct file* file` and `int offset`. The variable `file` contains a file 
+variables: `struct file* file` and `int offset`. The variable `file` contains a file  
 and the offset is the current reading/writing position in the file.  
   
 We then declared the variable `struct file_descriptor *fd_table` as an array of  
@@ -147,7 +147,7 @@ The function `fs_open()` opens a file and returns a file escriptor which can the
 used for subsequent operations. The first thing we did was use the same filename checks  
 that we used in phase 2 in order to check valid file names. After we checked if too many  
 files were open. Once it passes the beginning checks, it then iterates through `root_dir`.  
-It then finds the file that it wants to open, in which we set as the `file_descriptor` 
+It then finds the file that it wants to open, in which we set as the `file_descriptor`  
 variable `open_file`. We then fill in the contents of `open_file` with the file that we  
 obtain from `root_dir` and the default opened offset 0, and also increment `num_open`.  
 We then iterate through `fd_table` to grab an empty entry to store `open_file`, and  
