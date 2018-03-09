@@ -54,37 +54,37 @@ contents of the FAT blocks. We also had to implement `index` which is a multiple
 The first thing that was done in `fs_umount()` was writing out the meta-information  
 and file data out to the disk by using `block_write()`. After we wrote out to the  
 disk, we simply freed our three structures `root_dr`, `fat_table`, and `super_block`  
-
-### Info
-
+  
+### Info  
+  
 To implement our info function, we based the print statements off the tester  
-`fs_ref.x`. In order to get `fat_free_ratio` and rdir_free_ratio`, we had to implement  
-two different helper functions.
+`fs_ref.x`. In order to get `fat_free_ratio` and `rdir_free_ratio`, we had to implement  
+two different helper functions.  
   
 The first function is `get_fat_free_blk()`, which simply searches through `fat_table`  
-and increments the counter `fat_free_blk`, whenever the entry is empty.
+and increments the counter `fat_free_blk`, whenever the entry is empty.  
   
 The second function `get_rdir_free_blk()` does the same as `get_fat_free_blk`, but  
 instead it iterates through `root_dir` and checks if it's empty by comparing the  
 first character of the filename and '\0'  
   
-### Testing Phase 1 
+### Testing Phase 1  
   
 Testing phase 1 was a fairly simple process. We used `fs_make.x` to generate disks  
 of different names and sizes, then tested it using our `test_fs.x` and the tester  
 `fs_ref.x` to compare.  
-  
+   
 To take account of disknames that cannot be opened and invalid file systems in  
 `fs_mount()`, we implemented a check using `block_disk_open()` and checking if  
 it returns -1. If it returns -1, it means that it had a problem opening the  
 disk, therefore our program returns -1 in this case as well. We also used a  
 check in `fs_umount()` where we checked if `block_disk_close()` returns -1.  
 This only took account of cases in which there were no underlying virtual disks  
-or if the virtual disk cannot be closed.
+or if the virtual disk cannot be closed.  
   
 ## Phase 2: File Creation/Deletion   
   
-### Create
+### Create  
   
 The first thing we did in `fs_create()` was to check for a valid filename. We  
 two checks: one to check if the filename + '\0' would be greater than  
@@ -98,37 +98,37 @@ entry and to check for duplicates. If it finds an empty entry, then we set
 the `file` block. the variable `to_write` is initailized as 0, but then changes  
 to 1 only if there is an empty entry. If it equals 0 after iterating, then that  
 means there are no empty entries in the root directory. Otherwise, if it equals  
-to 1, then we are able to create the file.
+to 1, then we are able to create the file.  
   
-### Delete
+### Delete  
   
-In `fs_delete()`, we used the same check for the filename that was in `fs_create().  
+In `fs_delete()`, we used the same check for the filename that was in `fs_create().`  
 After the check, we were able to iterate through the root directory and check if  
 the file exists. The first character of empty entries in the root directory is '\0',  
 so we first checked using that, and if it is not empty, then we proceeded with  
 `strcmp()` to compare the file name of the respective entry and 'filename', the  
 file we want to delete. If it is a match, then we delete it by setting the first  
-character of the file to '\0'.
+character of the file to '\0'.  
   
-### Ls
-  
+### Ls  
+   
 Since we are using an array, we iterate through `root_dir` `FS_FILE_MAX_COUNT` or  
 128 times. We need to iterate through the whole array, and not just until we find  
 an empty entry, since there can be deleted files in between created files. While  
 iterating, we check if the file is not empty by using the same check as stated  
 previously, by comparing the first character of the file name to '\0'. Then we print  
-out a statement showing the file's name, size, and index.
-
-### Testing Phase 2
+out a statement showing the file's name, size, and index.  
   
+### Testing Phase 2  
+   
 In phase 2, we created files using `echo` and `touch` with different filenames and  
 tested it with `fs_ref.x` to check if it was valid or not. We then compared with our  
 program and took account of valid file names by addressing and checking them in the  
-beginning of our functions.
+beginning of our functions.  
   
-Some invalid filenames included: `filefilefilefile` (16 characters)
+Some invalid filenames included: `filefilefilefile` (16 characters)  
   
-## Phase 3: File Descriptor Operations
+## Phase 3: File Descriptor Operations  
   
 In this stage we needed to create a new struct for the file descriptors in order to  
 handle reading and writing. We made `file_descriptor` a struct consisting of two  
@@ -146,8 +146,8 @@ files.
 The function `fs_open()` opens a file and returns a file escriptor which can then be  
 used for subsequent operations. The first thing we did was use the same filename checks  
 that we used in phase 2 in order to check valid file names. After we checked if too many  
-files were open. Once it passes the beginning checks, it then iterates through `root_dir`.
-It then finds the file that it wants to open, in which we set as the file_descriptor` 
+files were open. Once it passes the beginning checks, it then iterates through `root_dir`.  
+It then finds the file that it wants to open, in which we set as the `file_descriptor` 
 variable `open_file`. We then fill in the contents of `open_file` with the file that we  
 obtain from `root_dir` and the default opened offset 0, and also increment `num_open`.  
 We then iterate through `fd_table` to grab an empty entry to store `open_file`, and  
@@ -158,9 +158,9 @@ then return the file descriptor.
 The function `fs_close()` closes the file descriptor. Here we checked if there  
 are too many files opened or if the file descriptor is valid and not out of bounds.  
 If it's valid, then we check `fd_table` at the index and check if it is NULL. If it is  
-not then we set the `fd_table` entry to NULL and free the file descriptor by setting the
-respective file descriptor to another variable `close_fd`. We also decrement `num_open`.
-
+not then we set the `fd_table` entry to NULL and free the file descriptor by setting the  
+respective file descriptor to another variable `close_fd`. We also decrement `num_open`.  
+  
 ### Stat
   
 The function `fs_stat()` gives the file size of the file descriptor. In order to do that  
@@ -186,7 +186,7 @@ empathy points plz kendall
   
 The function `fs_read()` simply reads `count` bytes of data from a file off file  
 descriptor `fd` into a buffer pointer `buf`. We first started this function with a    
-various of checks to make sure there are not too many files open, if the `fd` is out of  
+various of checks to make sure there are not too many files open, if the `fd` is out of   
 bounds. or if the file was not open at `fd` in `fd_table`. After we declared a new  
 variable, a void pointer `bounce`. We also created an int `buffer_offset`. sry i lowkey  
-dont know whats happening here lmao
+dont know whats happening here lmao  
