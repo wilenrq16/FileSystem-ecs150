@@ -344,6 +344,7 @@ int fs_stat(int fd)
 int fs_lseek(int fd, size_t offset)
 {
     // TODO: OFFSET BOUND
+
     // Check if too many files are open
     if (num_open == FS_OPEN_MAX_COUNT-1)
     {
@@ -368,18 +369,7 @@ int fs_lseek(int fd, size_t offset)
 
 int fs_write(int fd, void *buf, size_t count)
 {
-	/* TODO: Phase 4 */
-    return 0;
-}
-
-int fs_read(int fd, void *buf, size_t count)
-{
-    // TODO: OFFSET BOUND
-    // Check if too many files are open
-    if (num_open == FS_OPEN_MAX_COUNT-1)
-    {
-        return -1;
-    }
+    // TODO: OFFSET BOUND CORNER CASE
 
     // Check if fd is out of bounds
     if(fd < 0 || fd >= FS_OPEN_MAX_COUNT) 
@@ -387,7 +377,27 @@ int fs_read(int fd, void *buf, size_t count)
         return -1;
     }
     
-    // Attempt lookup to determine if file exists at fd
+    // Check file opened at fd
+    struct file_descriptor * file = fd_table[fd];
+    if(file == NULL)
+    { // There was no file open at fd
+        return -1; 
+    } 
+    
+    return 0;
+}
+
+int fs_read(int fd, void *buf, size_t count)
+{
+    // TODO: OFFSET BOUND CORNER CASE
+
+    // Check if fd is out of bounds
+    if(fd < 0 || fd >= FS_OPEN_MAX_COUNT) 
+    {
+        return -1;
+    }
+    
+    // Check file opened at fd
     struct file_descriptor * file = fd_table[fd];
     if(file == NULL)
     { // There was no file open at fd
@@ -397,7 +407,9 @@ int fs_read(int fd, void *buf, size_t count)
     // BEGIN: File read
     void * bounce = malloc(BLOCK_SIZE);
     int buffer_offset = 0;
-    while(count > 0) { // data requested to be written
+
+    // Loop will continue to loop through Blocks until eof or finished reading
+    while(count > 0) {
         if(file->offset >= file->file->file_size)
         { // End of File
             break;
