@@ -155,35 +155,44 @@ int fs_create(const char *filename)
         return -1;
     }
 
-    /* Start iterating through @root_dir to find empty entry 
+    /* Start iterating through @root_dir to find empty entry & check existing
      * FS_OPEN_MAX_COUNT = 128 
      */
-    int i;
-    for (i = 0; i < FS_FILE_MAX_COUNT; i++)
+    int to_write = 0;
+    int index = 0;
+    for (int i = 0; i < FS_OPEN_MAX_COUNT; i++)
     {
-        /* Empty entries first character = '\0' */
-        if (root_dir[i].filename[0] == '\0')
+        /* Empty entries first character == '\0' */
+        if ((root_dir[i].filename[0] == '\0') && (to_write == 0))
         {
-            /* Specify name of content and reset other information */
-            strcpy(root_dir[i].filename, filename);
-            root_dir[i].file_size = 0;
-            root_dir[i].data_index = FAT_EOC;
-            break;
+            index = i;
+            to_write = 1;
+        }
+        else if (root_dir[i].filename[0] != '\0') 
+        {
+            if (strcmp(root_dir[i].filename, filename) == 0)
+            {
+                perror("file is currently running");
+                return -1;
+            }
         }
     }
- 
+
     /* Check if @root_dir is full */
-    if (i == FS_OPEN_MAX_COUNT)
+    if (to_write == 0)
     {
         perror("no more space in root_dir");
         return -1;
     }
 
-    /* Success */
+    /* Success
+     * Specify name of content and reset other information 
+     */
+    strcpy(root_dir[index].filename, filename);
+    root_dir[index].file_size = 0;
+    root_dir[index].data_index = FAT_EOC;
     return 0;
 }
-
-
 
 int fs_delete(const char *filename)
 {
