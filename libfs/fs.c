@@ -40,7 +40,6 @@ struct file_descriptor {
 struct superblock* super_block;
 uint16_t *fat_table;
 struct file* root_dir;
-uint16_t * fat_array; // Stores the FAT ARRAY
 
 // Open Files
 struct file_descriptor* fd_table[FS_OPEN_MAX_COUNT];
@@ -57,6 +56,23 @@ int get_fat_free_blk() {
         }
     }
     return fat_free_blk;
+}
+
+/*
+ * get_next_free_block
+ *
+ * Description: Extracts the next free block from the fat table.
+*/
+int get_next_free_block()
+{
+    for(int i = 0; i < super_block->data_blk_count; i++)
+    {
+        if(fat_table[i] == 0)
+        {
+            return i;
+        }
+    }
+    return -1;
 }
 
 int get_rdir_free_blk() {
@@ -121,6 +137,8 @@ int fs_umount(void)
     /* All meta-information and file data must hve been written out to disk */
     block_write(super_block->rdir_blk, root_dir);
     block_write(0, super_block);
+    block_write(1, fat_table);
+    block_write(2, fat_table + BLOCK_SIZE);
     
     /* Delete */
     free(root_dir);
@@ -215,6 +233,16 @@ int fs_delete(const char *filename)
             {
                 /* "Delete" the file */
                 root_dir[i].filename[0] = '\0';
+
+                /* Clear FAT */
+                uint16_t current_FAT_index = root_dir[i].data_index;
+                uint16_t temp_index;
+                while(current_FAT_index != FAT_EOC)
+                {
+                    temp_index = fat_table[current_FAT_index];
+                    fat_table[current_FAT_index] = 0;
+                    current_FAT_index = temp_index;
+                }
                 break;
             }
         }
@@ -393,6 +421,74 @@ int fs_write(int fd, void *buf, size_t count)
         return -1; 
     } 
     
+    // BEGIN: File read
+
+    if(file->file->data_index == FAT_EOC)
+    { // If the file is empty assign a first block
+        int next_block = get_next_free_block();
+        if(next_block == -1)  // No more blocks lefts
+            return 0;
+
+        file->file->data_index = next_block;
+        fat_table[next_block] = FAT_EOC;
+    }
+    int buffer_offset = 0;
+
+    // Begin Write
+    while(count > 0)
+    {
+        int block_sequence_index = (file->offset)/BLOCK_SIZE; // Block number in list
+        uint16_t current_block = file->file->data_index; // Current Block actual block
+
+        printf("BLOCK_SEQUENCE: %d\n", block_sequence_index);
+        
+        // Traverse through FAT to extract Block_Number
+        for(int i = 0; i < block_sequence_index; i++)
+        {
+            if(fat_table[current_block] == FAT_EOC)
+            { // Allocate a new fat block
+                int next_block = get_next_free_block();
+                if(next_block == -1)  // No more blocks lefts
+                    return 0;
+
+                fat_table[current_block] = next_block;
+                fat_table[next_block] = FAT_EOC; 
+            }
+            
+            current_block = fat_table[current_block]; // Extract next block
+        } 
+        
+        int block_offset = file->offset%BLOCK_SIZE;
+
+        uint8_t * bounce = malloc(BLOCK_SIZE);
+        // Check if we need to read from a block
+        if(block_offset != 0 || block_offset + count < BLOCK_SIZE)
+        { // Modifying existing block so we need to extract the block's data!    
+            block_read(current_block+super_block->data_blk,bounce); // Read Block this is a bounce block
+
+            if(block_offset + count < BLOCK_SIZE) {
+                memcpy(bounce + block_offset, buf+buffer_offset, count);
+                file->offset += count;
+                buffer_offset += count;
+                count = 0;
+            } else {
+                memcpy(bounce + block_offset, buf+buffer_offset, BLOCK_SIZE - block_offset);
+                file->offset += BLOCK_SIZE - block_offset;
+                buffer_offset += BLOCK_SIZE - block_offset;
+                count -= BLOCK_SIZE - block_offset;
+            }
+
+        } else {
+            memcpy(bounce, buf+buffer_offset, BLOCK_SIZE);
+            file->offset += BLOCK_SIZE;
+            buffer_offset += BLOCK_SIZE;
+            count -= BLOCK_SIZE;
+        }
+
+        block_write(current_block + super_block->data_blk,bounce);
+        free(bounce);
+    }
+    file->file->file_size = file->offset;
     return 0;
 }
 
@@ -434,11 +530,19 @@ int fs_read(int fd, void *buf, size_t count)
         }
 
         block_read(current_block+super_block->data_blk,bounce); // Read Block this is a bounce block
+        int block_offset = file->offset%BLOCK_SIZE;
         
-        if(count < BLOCK_SIZE) { 
-            memcpy(buf+buffer_offset, bounce, count); // Copy partial block
+
+        if(count+block_offset < BLOCK_SIZE) { 
+            memcpy(buf+buffer_offset, bounce+block_offset, count); // Copy partial block
             file->offset += count; // update offset
+            buffer_offset += count;
             break;
+        } else if (block_offset > 0){
+            memcpy(buf+buffer_offset, bounce + block_offset, BLOCK_SIZE - block_offset); // Copy entire block
+            buffer_offset += BLOCK_SIZE - block_offset; // update buffer offset for next iteration
+            file->offset += BLOCK_SIZE - block_offset;  // update read offset
+            count -= BLOCK_SIZE-block_offset; // update count
         } else {
             memcpy(buf+buffer_offset, bounce, BLOCK_SIZE); // Copy entire block
             buffer_offset += BLOCK_SIZE; // update buffer offset for next iteration
@@ -448,6 +552,6 @@ int fs_read(int fd, void *buf, size_t count)
     }
  
     free(bounce);
-    return 0;
+    return buffer_offset;
 }
 
