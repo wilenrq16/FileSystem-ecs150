@@ -38,8 +38,9 @@ struct file_descriptor {
 
 /* DECLARING VARIABLES */
 struct superblock* super_block;
-uint16_t *file_table;
+uint16_t *fat_table;
 struct file* root_dir;
+uint16_t * fat_array; // Stores the FAT ARRAY
 
 // Open Files
 struct file_descriptor* fd_table[FS_OPEN_MAX_COUNT];
@@ -50,7 +51,7 @@ int get_fat_free_blk() {
     int fat_free_blk = 0;
     for (int i = 0; i < super_block->data_blk_count; i++)
     {
-        if (file_table[i] == 0)
+        if (fat_table[i] == 0)
         {
             fat_free_blk++;
         }
@@ -100,14 +101,14 @@ int fs_mount(const char *diskname)
 
     /* Initialize @data_blk and @file_table (FAT) */
     uint16_t * data_blk = malloc(sizeof(uint16_t)*BLOCK_SIZE);
-    file_table = malloc(sizeof(uint16_t)*super_block->fat_blk_count*BLOCK_SIZE);
+    fat_table = malloc(sizeof(uint16_t)*super_block->fat_blk_count*BLOCK_SIZE);
 
     /* @index - Add with @i in order to get correct index for FAT */
     int index = 0;
     for (int i = 1; i <= super_block->fat_blk_count; i++)
     {
         block_read(i, data_blk);
-        memcpy(file_table + index, data_blk, BLOCK_SIZE);
+        memcpy(fat_table + index, data_blk, BLOCK_SIZE);
         index += 4096;
     }   
 
@@ -123,7 +124,7 @@ int fs_umount(void)
     
     /* Delete */
     free(root_dir);
-    free(file_table);
+    free(fat_table);
     free(super_block); 
 
     /* Success */
@@ -158,7 +159,7 @@ int fs_create(const char *filename)
      * FS_OPEN_MAX_COUNT = 128 
      */
     int i;
-    for (i = 0; i < FS_OPEN_MAX_COUNT; i++)
+    for (i = 0; i < FS_FILE_MAX_COUNT; i++)
     {
         /* Empty entries first character = '\0' */
         if (root_dir[i].filename[0] == '\0')
@@ -167,6 +168,7 @@ int fs_create(const char *filename)
             strcpy(root_dir[i].filename, filename);
             root_dir[i].file_size = 0;
             root_dir[i].data_index = FAT_EOC;
+            break;
         }
     }
  
@@ -341,7 +343,26 @@ int fs_stat(int fd)
 
 int fs_lseek(int fd, size_t offset)
 {
-	/* TODO: Phase 3 */
+    // TODO: OFFSET BOUND
+    // Check if too many files are open
+    if (num_open == FS_OPEN_MAX_COUNT-1)
+    {
+        return -1;
+    }
+
+    // Check if fd is out of bounds
+    if(fd < 0 || fd >= FS_OPEN_MAX_COUNT) 
+    {
+        return -1;
+    }
+    
+    // Attempt lookup to determine if file exists at fd
+    if(fd_table[fd] == NULL)
+    { // There was no file open at fd
+        return -1; 
+    } else { 
+        fd_table[fd]->offset++;
+    }
     return 0;
 }
 
@@ -353,7 +374,59 @@ int fs_write(int fd, void *buf, size_t count)
 
 int fs_read(int fd, void *buf, size_t count)
 {
-	/* TODO: Phase 4 */
+    // TODO: OFFSET BOUND
+    // Check if too many files are open
+    if (num_open == FS_OPEN_MAX_COUNT-1)
+    {
+        return -1;
+    }
+
+    // Check if fd is out of bounds
+    if(fd < 0 || fd >= FS_OPEN_MAX_COUNT) 
+    {
+        return -1;
+    }
+    
+    // Attempt lookup to determine if file exists at fd
+    struct file_descriptor * file = fd_table[fd];
+    if(file == NULL)
+    { // There was no file open at fd
+        return -1; 
+    } 
+
+    // BEGIN: File read
+    void * bounce = malloc(BLOCK_SIZE);
+    int buffer_offset = 0;
+    while(count > 0) { // data requested to be written
+        if(file->offset >= file->file->file_size)
+        { // End of File
+            break;
+        }
+
+        int block_sequence_index = (file->offset)/BLOCK_SIZE; // Block number in list
+        uint16_t current_block = file->file->data_index; // Current Block actual block
+        
+        // Traverse through FAT to extract Block_Number
+        for(int i = 0; i < block_sequence_index; i++)
+        {
+            current_block = fat_table[current_block]; // Extract next block
+        }
+
+        block_read(current_block+super_block->data_blk,bounce); // Read Block this is a bounce block
+        
+        if(count < BLOCK_SIZE) { 
+            memcpy(buf+buffer_offset, bounce, count); // Copy partial block
+            file->offset += count; // update offset
+            break;
+        } else {
+            memcpy(buf+buffer_offset, bounce, BLOCK_SIZE); // Copy entire block
+            buffer_offset += BLOCK_SIZE; // update buffer offset for next iteration
+            file->offset += BLOCK_SIZE;  // update read offset
+            count -= BLOCK_SIZE; // update count
+        }
+    }
+ 
+    free(bounce);
     return 0;
 }
 
