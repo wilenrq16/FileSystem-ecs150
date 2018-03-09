@@ -266,7 +266,7 @@ int fs_ls(void)
     {
         if(root_dir[i].filename[0] != '\0')
         {
-            printf("filename: %s, file_size: %d, data_index: %d\n",root_dir[i].filename, root_dir[i].file_size, root_dir[i].data_index);
+            printf("file: %s, size: %d, data_blk: %d\n",root_dir[i].filename, root_dir[i].file_size, root_dir[i].data_index);
         }
     }
     return 0;
@@ -489,7 +489,7 @@ int fs_write(int fd, void *buf, size_t count)
         free(bounce);
     }
     file->file->file_size = file->offset;
-    return 0;
+    return buffer_offset;
 }
 
 int fs_read(int fd, void *buf, size_t count)
