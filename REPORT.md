@@ -164,7 +164,7 @@ file descriptor by setting the respective file descriptor to another variable
 `close_fd`. We also decremented `num_open`.  
   
 ### Stat 
-The function `fs_stat()` gives the file size of the file descriptor. In order to 
+The function `fs_stat()` gives the file size of the file descriptor. In order to  
 do that we checked if `fd_table` at the index is valid and return the file size.   
   
 ### LSeek  
