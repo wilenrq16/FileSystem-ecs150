@@ -223,7 +223,7 @@ int fs_delete(const char *filename)
 
     /* Start delete process */
     int i;
-    for (i = 0; i < FS_OPEN_MAX_COUNT; i++)
+    for (i = 0; i < FS_FILE_MAX_COUNT; i++)
     {
         /* Check if root_dir[i] contains a file before strcmp */
         if (root_dir[i].filename[0] != '\0')
@@ -249,7 +249,7 @@ int fs_delete(const char *filename)
     }
 
     /* Check if file is not in @root_dir */
-    if (i == FS_OPEN_MAX_COUNT)
+    if (i == FS_FILE_MAX_COUNT)
     {
         perror("file is not inside root_dir");
         return -1;
@@ -289,7 +289,7 @@ int fs_open(const char *filename)
 
     /* Find the file */
     int i;
-    for (i = 0; i < FS_OPEN_MAX_COUNT; i++)
+    for (i = 0; i < FS_FILE_MAX_COUNT; i++)
     {
         // Check next element is a valid file
         if (root_dir[i].filename[0] != '\0')
@@ -311,10 +311,10 @@ int fs_open(const char *filename)
                     {
                         fd_table[a] = open_file;
                         return a; // a is the file descriptor
-                    }
+                    } 
                 }
 
-            }
+            } 
         }
     }
 
@@ -324,11 +324,6 @@ int fs_open(const char *filename)
 
 int fs_close(int fd)
 {
-    // Check if too many files are open
-    if (num_open == FS_OPEN_MAX_COUNT-1)
-    {
-        return -1;
-    }
 
     // Check if fd is out of bounds
     if(fd < 0 || fd >= FS_OPEN_MAX_COUNT) 
