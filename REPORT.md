@@ -51,7 +51,7 @@ multiple of `BLOCK_SIZE` which we used for `fat_table`.
   
 ### Unmount  
   
-The first thing that was done in `fs_umount()` was writing out the 
+The first thing that was done in `fs_umount()` was writing out the  
 meta-information and file data out to the disk by using `block_write()`. After  
 we wrote out to the disk, we simply freed our three structures `root_dr`,   
 `fat_table`, and `super_block`   
@@ -62,7 +62,7 @@ To implement our info function, we based the print statements off the tester
 `fs_ref.x`. In order to get `fat_free_ratio` and `rdir_free_ratio`, we had to  
 implement two different helper functions.   
   
-The first function is `get_fat_free_blk()`, which simply searches through 
+The first function is `get_fat_free_blk()`, which simply searches through  
 `fat_table` and increments the counter `fat_free_blk`, whenever the entry is  
 empty.  
   
@@ -109,13 +109,13 @@ the file exists. The first character of empty entries in the root directory is '
 so we first checked using that, and if it is not empty, then we proceeded with  
 `strcmp()` to compare the file name of the respective entry and 'filename', the  
 file we want to delete. If it is a match, then we delete it by setting the first  
-character of the file to '\0'. We then traverse through the Fat table starting
-with the data index and we set all values to 0 until we hit the FAT_EOC file
-0xFFFF. This essentially removes the blocks but doesn't actually clear the data
+character of the file to '\0'. We then traverse through the Fat table starting  
+with the data index and we set all values to 0 until we hit the FAT_EOC file  
+0xFFFF. This essentially removes the blocks but doesn't actually clear the data  
 from the data blocks.  
   
 ### Ls  
-Since we are using an array, we iterate through `root_dir` `FS_FILE_MAX_COUNT` 
+Since we are using an array, we iterate through `root_dir` `FS_FILE_MAX_COUNT`  
 or 128 times. We need to iterate through the whole array, and not just until we  
 find an empty entry, since there can be deleted files in between created files.  
 While iterating, we check if the file is not empty by using the same check as  
@@ -144,8 +144,8 @@ We also have the uint8_t counter `num_open` that keeps track of the number of
 opened files.  
   
 ### Open
-The function `fs_open()` opens a file and returns a file descriptor which can 
-then be used for subsequent operations. The first thing we did was use the same  
+The function `fs_open()` opens a file and returns a file descriptor which can  
+then be used for subsequent operations. The first thing we did was use the same   
 filename checks that we used in phase 2 in order to check valid file names.   
 After we checked if too many files were open. Once it passes the beginning  
 checks, it then iterates through `root_dir`. It then finds the file that it  
@@ -160,7 +160,7 @@ The function `fs_close()` closes the file descriptor. Here we checked if there
 are too many files opened or if the file descriptor is valid and not out of  
 bounds. If it's valid, then we check `fd_table` at the index and check if it  
 is NULL. If it is not then we set the `fd_table` entry to NULL and free the  
-file descriptor by setting the respective file descriptor to another variable 
+file descriptor by setting the respective file descriptor to another variable  
 `close_fd`. We also decremented `num_open`.  
   
 ### Stat 
