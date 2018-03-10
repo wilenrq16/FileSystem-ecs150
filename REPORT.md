@@ -101,17 +101,18 @@ means there are no empty entries in the root directory. Otherwise, if it equals
 to 1, then we are able to create the file.  
   
 ### Delete  
-  
 In `fs_delete()`, we used the same check for the filename that was in `fs_create().`  
 After the check, we were able to iterate through the root directory and check if  
 the file exists. The first character of empty entries in the root directory is '\0',  
 so we first checked using that, and if it is not empty, then we proceeded with  
 `strcmp()` to compare the file name of the respective entry and 'filename', the  
 file we want to delete. If it is a match, then we delete it by setting the first  
-character of the file to '\0'.  
-  
+character of the file to '\0'. We then traverse through the Fat table starting
+with the data index and we set all values to 0 until we hit the FAT_EOC file
+0xFFFF. This essentially removes the blocks but doesn't actually clear the data
+from the data blocks.
+
 ### Ls  
-   
 Since we are using an array, we iterate through `root_dir` `FS_FILE_MAX_COUNT` or  
 128 times. We need to iterate through the whole array, and not just until we find  
 an empty entry, since there can be deleted files in between created files. While  
@@ -142,51 +143,86 @@ We also have the uint8_t counter `num_open` that keeps track of the number of op
 files.  
   
 ### Open
-  
 The function `fs_open()` opens a file and returns a file escriptor which can then be  
 used for subsequent operations. The first thing we did was use the same filename checks  
 that we used in phase 2 in order to check valid file names. After we checked if too many  
 files were open. Once it passes the beginning checks, it then iterates through `root_dir`.  
 It then finds the file that it wants to open, in which we set as the `file_descriptor`  
 variable `open_file`. We then fill in the contents of `open_file` with the file that we  
-obtain from `root_dir` and the default opened offset 0, and also increment `num_open`.  
-We then iterate through `fd_table` to grab an empty entry to store `open_file`, and  
-then return the file descriptor.
+obtain from `root_dir` and the default opened offset 0, and also increment
+`num_open`. We then iterate through `fd_table` to grab an empty entry to store
+`open_file`, and then return the file descriptor.
   
-### Closing
-  
+### Closing 
 The function `fs_close()` closes the file descriptor. Here we checked if there  
 are too many files opened or if the file descriptor is valid and not out of bounds.  
 If it's valid, then we check `fd_table` at the index and check if it is NULL. If it is  
 not then we set the `fd_table` entry to NULL and free the file descriptor by setting the  
 respective file descriptor to another variable `close_fd`. We also decrement `num_open`.  
   
-### Stat
-  
+### Stat 
 The function `fs_stat()` gives the file size of the file descriptor. In order to do that  
 we checked if `fd_table` at the index is valid and return the file size.  
   
-### LSeek LMAO KENDALL IS THIS RIGHT?????
-  
+### LSeek
 The function `fs_lseek()` explicitly sets the offset, and is implemented by finding the  
-file descriptor at `fd` in `fd_table` and incrementing the offset
+file descriptor at `fd` in `fd_table` and sets the offset of the file
+descriptor to the value given.
   
 ### Testing Phase 3
-  
-KENDALL u can prolly add some shit here, i didnt really play around with it taht much lmao
+  KENDALL u can prolly add some shit here, i didnt really play around with it taht much lmao
   
 Some invalid cases included:  
   
 ## Phase 4: File Reading/Writing
-  
-This was the hardest phase to implement. Cry to the professor here for some pity and  
-empathy points plz kendall  
-  
+
+This phase is the most involved of the phases and required a deeper
+understanding of how the file system works. The problem with this phase was
+properly updating and extracting data from blocks since not all operations did
+not involve and entire block of data. We needed to properly keep track of where
+the offsets were within blocks and when new blocks needed to be allocated.
+
 ### Read  
-  
-The function `fs_read()` simply reads `count` bytes of data from a file off file  
-descriptor `fd` into a buffer pointer `buf`. We first started this function with a    
-various of checks to make sure there are not too many files open, if the `fd` is out of   
-bounds. or if the file was not open at `fd` in `fd_table`. After we declared a new  
-variable, a void pointer `bounce`. We also created an int `buffer_offset`. sry i lowkey  
-dont know whats happening here lmao  
+We first began by implementing `fs_read()` ad recommended. After doing
+preliminary checks to determine that the file was open we then began reading the
+file. This process involved reading data block by block depending on how much
+data was needed. We first used the `data_index` from the appropriate file within
+a file descriptor this is the starting address of the file the 0th block for
+this file. We then looked at the current offset and determined which block in
+the sequence  we were offset to. Using a loop we traversed the `fat_table` array
+to the block index in the sequence (not the block number) we then extracted this
+block number.
+
+With the correct block number the next step was to read from the block. We read
+from the block using the `block_read()` function into a bounce blockk, `bounce`.
+From here we have several options depending on how much data was to be placed
+into the buffer. If the modulo of the offset was not zero it means we needed to
+read from an offset within the block. We then were only able to read a maximum
+of the block size - offset with a minimum read being count. This whole process
+is done for the first read. We used `memcpy` to appropriately extract the data
+from the bounce with the correct offset and lengths into `buf`. We then
+increment the appropriate offsets and decrement count. If there is still data
+that needs to be read (for example if count > 4096 bytes) we repeat this entire
+process again. Once reading is complete it returns the number of bytes read. If
+the read requests more bytes than in the file we simply return the number of
+bytes until the EOF is reached.
+
+###Write
+With read complete write is almost exactly the same except the opposite wih a
+couple of modifications. First, we must consider the case where we ae simply
+overwriting data. if the offset is before the end then this is the case which
+means we may also need to copy some of the data out of the block we are
+modifying if the offset is not at the beginning of the block. In order to do
+this we checked for the case where data was being rewritten and extracted the
+block into bounce. From here we modified the data according to buffer and
+rewrote the block back. We repeated this process until all data required was
+written or until we ran out of blocks.
+
+### Testing Phase 4
+We wrote another command in test_fs.c called `inc_read' and `inc_write` they do
+the exact same operation as cat except we do the operation broken in 2 smaller
+of the operations. For example if we wanted to read 100bytes we first read 50 
+bytes then read another 50 bytes.
+
+## Comprehensive Testing
+
