@@ -46,6 +46,12 @@ struct file_descriptor* fd_table[FS_OPEN_MAX_COUNT];
 uint8_t num_open = 0;
 
 /* HELPER FUNCTIONS */
+
+/*
+ * get_fat_free_blk
+ *
+ * Description: Get the count of free FAT blocks
+ */
 int get_fat_free_blk() {
     int fat_free_blk = 0;
     for (int i = 0; i < super_block->data_blk_count; i++)
@@ -62,7 +68,7 @@ int get_fat_free_blk() {
  * get_next_free_block
  *
  * Description: Extracts the next free block from the fat table.
-*/
+ */
 int get_next_free_block()
 {
     for(int i = 0; i < super_block->data_blk_count; i++)
@@ -75,6 +81,11 @@ int get_next_free_block()
     return -1;
 }
 
+/*
+ * get_rdir_free_blk
+ *
+ * Description: Get the count of free blocks in root directory
+ */
 int get_rdir_free_blk() {
     int rdir_free_blk = 0;
     for (int i = 0; i < FS_FILE_MAX_COUNT; i++)
@@ -90,67 +101,147 @@ int get_rdir_free_blk() {
 /* FS FUNCTIONS */
 int fs_mount(const char *diskname)
 {
-    /* Check if disk is available */
+    // Check if disk is available
     if (block_disk_open(diskname) == -1)
     {
-        perror("opening disk");
         return -1;
     }
 
-    /* Create superblock @super_block */
+    // Create superblock @super_block
     super_block = malloc(sizeof(struct superblock));
 
-    /* Check @super_block malloc */
+    // Malloc error
+    if (super_block == NULL)
+    {
+        return -1;
+    }
 
-    /* Read into super_block */
+    // Read into super_block
     block_read(0, super_block);
 
-    /* Can probably add some checks here to check superblock */
+    // Check superblock signature 
+    if (memcmp("ECS150FS", super_block->signature, 8) != 0)
+    {
+        return -1;
+    }
+
+    // Check if disk count is corrent
+    if (super_block->total_blk_count != block_disk_count())
+    {
+        return -1;
+    }
+
+    int fat_blk_count_check;
+    int rdir_blk_check;
+    int data_blk_check;
+
+    if (block_disk_count() < BLOCK_SIZE)
+    {
+        fat_blk_count_check = 1;
+        rdir_blk_check = 2;
+        data_blk_check = 3;
+    }
+    else
+    {
+        fat_blk_count_check = block_disk_count() * 2 / BLOCK_SIZE;
+        rdir_blk_check = block_disk_count() * 2 / BLOCK_SIZE + 1;
+        data_blk_check = block_disk_count() * 2 / BLOCK_SIZE + 2;
+    }
+
+    // Check if fat block count is corrent
+    if (super_block->fat_blk_count != fat_blk_count_check)
+    {
+        return -1;
+    }
+
+    // Check if root directory block start index is corrent
+    if (super_block->rdir_blk!= rdir_blk_check)
+    {
+        return -1;
+    }
+
+    // Check if data block start index is corrent
+    if (super_block->data_blk!= data_blk_check)
+    {
+        return -1;
+    }
+
+    // Check if data block start index is corrent
+    if (super_block->data_blk_count != block_disk_count() - fat_blk_count_check - 2)
+    {
+        return -1;
+    }
+
 
     /* Create root directory @root_dir
      * Total size = FS_FILE_MAX_COUNT (or 128)
      */
     root_dir = (struct file*)malloc(sizeof(struct file) * FS_FILE_MAX_COUNT);
 
-    /* Read into root_dir */
+    // Read into root_dir
     block_read(super_block->rdir_blk, root_dir);
 
-    /* Initialize @data_blk and @file_table (FAT) */
+    // Initialize @data_blk and @file_table (FAT)
     uint16_t * data_blk = malloc(sizeof(uint16_t)*BLOCK_SIZE);
     fat_table = malloc(sizeof(uint16_t)*super_block->fat_blk_count*BLOCK_SIZE);
 
-    /* @index - Add with @i in order to get correct index for FAT */
+    // @index - Add with @i in order to get correct index for FAT
     int index = 0;
     for (int i = 1; i <= super_block->fat_blk_count; i++)
     {
+        // Read each data block, and copy it into @fat_table, also increment index
         block_read(i, data_blk);
         memcpy(fat_table + index, data_blk, BLOCK_SIZE);
         index += 4096;
     }   
 
-    /* Success */
+    // Success
     return 0;
 }
 
 int fs_umount(void)
 {
-    /* All meta-information and file data must hve been written out to disk */
+    // If there are still file descriptors open
+    if (num_open > 0)
+    {
+        return -1;
+    }
+
+    // If there are no underlying virtual disk open
+    if (block_disk_count() == -1)
+    {
+        return -1;
+    }
+
+    // All meta-information and file data must hve been written out to disk 
     block_write(super_block->rdir_blk, root_dir);
     block_write(0, super_block);
     block_write(1, fat_table);
     block_write(2, fat_table + BLOCK_SIZE);
     
-    /* Delete */
+    // Close the disk
+    if (block_disk_close() == -1)
+    {
+        return -1;
+    }
+
+    // Delete 
     free(root_dir);
     free(fat_table);
     free(super_block); 
 
-    /* Success */
+    // Success 
     return 0;
 }
 
 int fs_info(void)
 {
+    // If there are no underlying virtual disk open
+    if (block_disk_count() == -1)
+    {
+        return -1;
+    }
+
     int fat_free_blk = get_fat_free_blk();
     int rdir_free_blk = get_rdir_free_blk();
     printf("FS Info:\n");
@@ -166,8 +257,8 @@ int fs_info(void)
 
 int fs_create(const char *filename)
 {
-    /* Check filename, could probably have some more checks here */
-    if (strlen(filename) + 1 > FS_FILENAME_LEN)
+    // Check if filename is invalid or too long
+    if (strnlen(filename, FS_FILENAME_LEN) >= FS_FILENAME_LEN)
     {
         perror("filename too long");
         return -1;
@@ -180,7 +271,7 @@ int fs_create(const char *filename)
     int index = 0;
     for (int i = 0; i < FS_FILE_MAX_COUNT; i++)
     {
-        /* Empty entries first character == '\0' */
+        // Empty entries first character == '\0' 
         if ((root_dir[i].filename[0] == '\0') && (to_write == 0))
         {
             index = i;
@@ -188,18 +279,18 @@ int fs_create(const char *filename)
         }
         else if (root_dir[i].filename[0] != '\0') 
         {
+            // Check if the file named @filename already exists
             if (strcmp(root_dir[i].filename, filename) == 0)
             {
-                perror("file is currently running");
                 return -1;
             }
         }
     }
 
-    /* Check if @root_dir is full */
+    // Check if @root_dir is full 
     if (to_write == 0)
     {
-        perror("no more space in root_dir");
+        //perror("no more space in root_dir");
         return -1;
     }
 
@@ -214,27 +305,38 @@ int fs_create(const char *filename)
 
 int fs_delete(const char *filename)
 {
-    /* Check if filename is valid */
-    if (strlen(filename) + 1 > FS_FILENAME_LEN)
+    // Check if filename is valid 
+    if (strnlen(filename, FS_FILENAME_LEN) >= FS_FILENAME_LEN)
     {
-        perror("filename too long");
         return -1;
     }
 
-    /* Start delete process */
+    // Check if file is currently open
+    for(int a = 0; a < FS_OPEN_MAX_COUNT; a++)
+    {
+        if (fd_table[a] != NULL)
+        {
+            if (strcmp(fd_table[a]->file->filename, filename) == 0)
+            {
+                return -1;
+            } 
+        }
+    }
+
+    // Start delete process 
     int i;
     for (i = 0; i < FS_FILE_MAX_COUNT; i++)
     {
-        /* Check if root_dir[i] contains a file before strcmp */
+        // Check if root_dir[i] contains a file before strcmp 
         if (root_dir[i].filename[0] != '\0')
         {
-            /* Let's check if this is the file we want */
+            // Let's check if this is the file we want 
             if (strcmp(root_dir[i].filename, filename) == 0)
             {
-                /* "Delete" the file */
+                // "Delete" the file
                 root_dir[i].filename[0] = '\0';
 
-                /* Clear FAT */
+                // Clear FAT 
                 uint16_t current_FAT_index = root_dir[i].data_index;
                 uint16_t temp_index;
                 while(current_FAT_index != FAT_EOC)
@@ -248,19 +350,24 @@ int fs_delete(const char *filename)
         }
     }
 
-    /* Check if file is not in @root_dir */
+    // Check if file is not in @root_dir
     if (i == FS_FILE_MAX_COUNT)
     {
-        perror("file is not inside root_dir");
         return -1;
     }
 
-    /* Sucess */
+    /* Success */
     return 0;
 }
 
 int fs_ls(void)
 {
+    // If there are no underlying virtual disk open
+    if (block_disk_count() == -1)
+    {
+        return -1;
+    }
+
     printf("FS Ls:\n");
     for (int i = 0; i < FS_FILE_MAX_COUNT; i++ )
     {
@@ -274,10 +381,9 @@ int fs_ls(void)
 
 int fs_open(const char *filename)
 {
-    /* Check if filename is valid */
-    if (strlen(filename) + 1 > FS_FILENAME_LEN)
+    // Check if filename is valid 
+    if (strnlen(filename, FS_FILENAME_LEN) >= FS_FILENAME_LEN)
     {
-        perror("filename too long");
         return -1;
     }
 
@@ -317,7 +423,6 @@ int fs_open(const char *filename)
             } 
         }
     }
-
     // File Not Found
     return -1;
 }
