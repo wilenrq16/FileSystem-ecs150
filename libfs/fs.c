@@ -434,8 +434,6 @@ int fs_write(int fd, void *buf, size_t count)
     {
         int block_sequence_index = (file->offset)/BLOCK_SIZE; // Block number in list
         uint16_t current_block = file->file->data_index; // Current Block actual block
-
-        printf("BLOCK_SEQUENCE: %d\n", block_sequence_index);
         
         // Traverse through FAT to extract Block_Number
         for(int i = 0; i < block_sequence_index; i++)
