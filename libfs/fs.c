@@ -423,7 +423,7 @@ int fs_write(int fd, void *buf, size_t count)
     
     // BEGIN: File read
 
-    if(file->file->data_index == FAT_EOC)
+    if(file->file->data_index == FAT_EOC && count > 0)
     { // If the file is empty assign a first block
         int next_block = get_next_free_block();
         if(next_block == -1)  // No more blocks lefts
