@@ -174,11 +174,11 @@ int fs_create(const char *filename)
     }
 
     /* Start iterating through @root_dir to find empty entry & check existing
-     * FS_OPEN_MAX_COUNT = 128 
+     * FS_FILE_MAX_COUNT = 128 
      */
     int to_write = 0;
     int index = 0;
-    for (int i = 0; i < FS_OPEN_MAX_COUNT; i++)
+    for (int i = 0; i < FS_FILE_MAX_COUNT; i++)
     {
         /* Empty entries first character == '\0' */
         if ((root_dir[i].filename[0] == '\0') && (to_write == 0))
