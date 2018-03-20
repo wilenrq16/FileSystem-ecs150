@@ -499,7 +499,7 @@ int fs_lseek(int fd, size_t offset)
     { // There was no file open at fd
         return -1; 
     } else { 
-        fd_table[fd]->offset++;
+        fd_table[fd]->offset = offset;
     }
     return 0;
 }
